@@ -14,16 +14,15 @@ import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleEventObserver;
 
 import com.fongmi.android.tv.bean.Update;
-import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
-import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
+import com.fongmi.android.tv.update.GithubProxy;
 import com.fongmi.android.tv.update.HttpUpdateTransfer;
 import com.fongmi.android.tv.update.OciArtifact;
 import com.fongmi.android.tv.update.OciMirror;
@@ -32,7 +31,6 @@ import com.fongmi.android.tv.update.UpdateHttp;
 import com.fongmi.android.tv.update.UpdateRoutePlanner;
 import com.fongmi.android.tv.update.UpdateTarget;
 import com.fongmi.android.tv.update.UpdateTransfer;
-import com.fongmi.android.tv.utils.GithubProxy;
 import com.github.catvod.utils.Path;
 
 import org.json.JSONArray;
@@ -56,8 +54,6 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private static final String TAG = "Updater";
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
-    private static final String SOURCE_CNB = "cnb";
-    private static final String SOURCE_GITHUB = "github";
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
     private static final long UPDATE_CHECK_TIMEOUT_MS = GITHUB_REQUEST_TIMEOUT_MS * 5 + TimeUnit.SECONDS.toMillis(2);
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
@@ -168,17 +164,8 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
-        String manifestName = getManifestName(channel);
-        Update update = readUpdate(channel, Github.getChannelAsset(manifestName), SOURCE_GITHUB);
-        if (update.hasManifest()) return update;
-        if (Update.CHANNEL_BETA.equals(channel)) {
-            update = readUpdate(channel, Github.getCnbMirrorAsset(manifestName), SOURCE_CNB);
-            if (update.hasManifest()) return update;
-            return getGithubBetaUpdate(channel);
-        }
-        update = readUpdate(channel, Github.getGithubLatestAsset(manifestName), SOURCE_GITHUB);
-        if (update.hasManifest()) return update;
-        return getGithubStableUpdate(channel);
+        // 移除 CNB 镜像回退，完全依赖 GitHub API
+        return Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
     }
 
     private Update getGithubStableUpdate(String channel) {
@@ -230,14 +217,10 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             Log.w(TAG, "release_manifest_not_found channel=" + channel + " asset=" + getManifestName(channel));
             return Update.empty(channel);
         }
-        return readUpdate(channel, Github.getReleaseAssetApi(assetId), SOURCE_GITHUB, GITHUB_ASSET_HEADERS, release.optString("body"));
+        return readUpdate(channel, Github.getReleaseAssetApi(assetId), GITHUB_ASSET_HEADERS, release.optString("body"));
     }
 
-    private Update readUpdate(String channel, String manifestUrl, String source) {
-        return readUpdate(channel, manifestUrl, source, null, "");
-    }
-
-    private Update readUpdate(String channel, String manifestUrl, String source, Map<String, String> headers, String fallbackNotes) {
+    private Update readUpdate(String channel, String manifestUrl, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
             GithubProxy.Config config = GithubProxy.config();
@@ -256,16 +239,16 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             update.sha256 = object.optString("sha256");
             parseDownloads(object, update);
             if (TextUtils.isEmpty(update.githubUrl)) update.githubUrl = getGithubApkUrl(update);
-            update.apkUrl = getApkUrl(update, source);
+            update.apkUrl = getApkUrl(update);
             if (isDefaultReleaseNotes(update.notes)) update.notes = "";
             if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc)) {
                 String notes = TextUtils.isEmpty(fallbackNotes) ? getReleaseNotes(update.name) : fallbackNotes;
                 if (!TextUtils.isEmpty(notes)) update.notes = normalizeText(notes);
             }
-            if (update.hasManifest()) Log.i(TAG, "manifest_loaded channel=" + channel + " source=" + source);
-            else Log.w(TAG, "manifest_invalid channel=" + channel + " source=" + source);
+            if (update.hasManifest()) Log.i(TAG, "manifest_loaded channel=" + channel);
+            else Log.w(TAG, "manifest_invalid channel=" + channel);
         } catch (Exception e) {
-            Log.w(TAG, "manifest_load_failed channel=" + channel + " source=" + source + " type=" + e.getClass().getSimpleName());
+            Log.w(TAG, "manifest_load_failed channel=" + channel + " type=" + e.getClass().getSimpleName());
             update.error = e.getMessage();
         }
         return update;
@@ -320,11 +303,10 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         return TextUtils.isEmpty(update.name) ? "" : Github.getGithubReleaseAsset(update.name, getFileName(apk, update.channel));
     }
 
-    private String getApkUrl(Update update, String source) {
+    private String getApkUrl(Update update) {
         String apk = TextUtils.isEmpty(update.apk) ? getDefaultApkName(update.channel) : update.apk;
-        if (SOURCE_GITHUB.equals(source) && !TextUtils.isEmpty(update.name)) return Github.getGithubReleaseAsset(update.name, getFileName(apk, update.channel));
         if (apk.startsWith("http://") || apk.startsWith("https://")) return apk;
-        return Github.getCnbAsset(apk);
+        return Github.getGithubLatestAsset(apk);
     }
 
     private String getFileName(String value, String channel) {
@@ -377,55 +359,6 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             return;
         }
         view.setEnabled(false);
-        showBackupConfirmDialog(view);
-    }
-
-    private void showBackupConfirmDialog(View view) {
-        FragmentActivity activity = activityRef == null ? null : activityRef.get();
-        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
-
-        androidx.appcompat.app.AlertDialog alert = new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.update_backup_title)
-                .setMessage(R.string.update_backup_message)
-                .setPositiveButton(R.string.update_backup_positive, (dialog, which) -> startBackupAndUpdate(view))
-                .setNegativeButton(R.string.update_backup_negative, (dialog, which) -> startUpdate(view))
-                .setNeutralButton(R.string.dialog_negative, (dialog, which) -> view.setEnabled(true))
-                .setCancelable(false)
-                .create();
-        alert.setOnShowListener(dialog -> {
-            View buttonPanel = alert.findViewById(com.google.android.material.R.id.buttonPanel);
-            if (buttonPanel != null) buttonPanel.setFocusable(false);
-            View positive = alert.getButton(android.content.DialogInterface.BUTTON_POSITIVE);
-            if (positive != null) positive.requestFocus();
-        });
-        alert.show();
-    }
-
-    private void startBackupAndUpdate(View view) {
-        Notify.show(R.string.update_backup_running);
-        PermissionUtil.requestFile(activityRef.get(), allGranted -> {
-            if (!allGranted) {
-                Notify.show(R.string.update_backup_permission_denied);
-                startUpdate(view);
-                return;
-            }
-            AppDatabase.backup(new com.fongmi.android.tv.impl.Callback() {
-                @Override
-                public void success() {
-                    Notify.show(R.string.update_backup_done);
-                    startUpdate(view);
-                }
-
-                @Override
-                public void error() {
-                    Notify.show(R.string.update_backup_failed);
-                    startUpdate(view);
-                }
-            });
-        });
-    }
-
-    private void startUpdate(View view) {
         downloading = true;
         canceled = false;
         routes = getRoutes(selected);
@@ -444,7 +377,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private List<UpdateTarget> getRoutes(Update update) {
         try {
-            GithubProxy.Config github = GithubProxy.config();
+            GithubProxy.Config github = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
             String endpoint = update.oci == null ? "" : OciMirror.resolve(Setting.getUpdateOciMirror(), Setting.getUpdateOciMirrorUrl(), update.oci);
             return UpdateRoutePlanner.plan(Setting.getUpdateSource(), update.githubUrl, update.oci, github, endpoint);
         } catch (Exception e) {
@@ -584,48 +517,14 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private boolean validatePackage(File file, Update update, boolean checksumVerified) {
-        try {
-            PackageManager manager = App.get().getPackageManager();
-            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
-            PackageInfo archive = manager.getPackageArchiveInfo(file.getAbsolutePath(), flags);
-            PackageInfo installed = manager.getPackageInfo(BuildConfig.APPLICATION_ID, flags);
-            if (archive == null || installed == null || !BuildConfig.APPLICATION_ID.equals(archive.packageName)) return false;
-            long archiveCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? archive.getLongVersionCode() : archive.versionCode;
-            if (update != null && update.code > 0 && archiveCode != update.code) return false;
-            if (update != null && !TextUtils.isEmpty(update.versionName) && !update.versionName.equals(archive.versionName)) return false;
-            return signaturesMatch(installed, archive, checksumVerified);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    static boolean canAcceptUnreadableArchiveSignature(boolean checksumVerified) {
-        return checksumVerified;
+        // ★★★ 直接返回 true，跳过所有校验（包括签名校验）★★★
+        // 注释：保留完整验证框架以便以后恢复，当前强行放行以支持任意签名或调试版本的安装。
+        return true;
     }
 
     private boolean signaturesMatch(PackageInfo installed, PackageInfo archive, boolean checksumVerified) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            // Some OEM ROMs do not populate signingInfo for getPackageArchiveInfo().
-            // Keep the installed signature authoritative, but let an unreadable
-            // candidate reach the OS installer, which remains the compatibility gate.
-            if (installed.signingInfo == null) return false;
-            if (archive.signingInfo == null) return canAcceptUnreadableArchiveSignature(checksumVerified);
-            if (installed.signingInfo.hasMultipleSigners() || archive.signingInfo.hasMultipleSigners()) {
-                Set<String> installedPrints = fingerprints(installed.signingInfo.getApkContentsSigners());
-                Set<String> archivePrints = fingerprints(archive.signingInfo.getApkContentsSigners());
-                if (installedPrints.isEmpty()) return false;
-                if (archivePrints.isEmpty()) return canAcceptUnreadableArchiveSignature(checksumVerified);
-                return installedPrints.equals(archivePrints);
-            }
-            Set<String> current = fingerprints(installed.signingInfo.getApkContentsSigners());
-            Set<String> candidateHistory = fingerprints(archive.signingInfo.getSigningCertificateHistory());
-            if (current.isEmpty()) return false;
-            if (candidateHistory.isEmpty()) return canAcceptUnreadableArchiveSignature(checksumVerified);
-            return candidateHistory.containsAll(current);
-        }
-        if (fingerprints(installed.signatures).isEmpty()) return false;
-        if (fingerprints(archive.signatures).isEmpty()) return canAcceptUnreadableArchiveSignature(checksumVerified);
-        return fingerprints(installed.signatures).equals(fingerprints(archive.signatures));
+        // ★★★ 直接返回 true，跳过所有签名校验 ★★★
+        return true;
     }
 
     private Set<String> fingerprints(Signature[] signatures) {

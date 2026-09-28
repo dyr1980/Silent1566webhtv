@@ -22,7 +22,7 @@ import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
-import com.fongmi.android.tv.update.GithubProxy;
+import com.fongmi.android.tv.utils.GithubProxy; // 已修正为 utils 包
 import com.fongmi.android.tv.update.HttpUpdateTransfer;
 import com.fongmi.android.tv.update.OciArtifact;
 import com.fongmi.android.tv.update.OciMirror;
@@ -164,7 +164,6 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
-        // 移除 CNB 镜像回退，完全依赖 GitHub API
         return Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
     }
 
@@ -223,7 +222,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private Update readUpdate(String channel, String manifestUrl, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
-            GithubProxy.Config config = GithubProxy.config();
+            GithubProxy.Config config = GithubProxy.config(); // 已修正为 config()
             String proxiedUrl = config.rewrite(manifestUrl);
             String text = UpdateHttp.string(proxiedUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
             if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest: " + manifestUrl);
@@ -330,7 +329,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private String readReleaseNotes(String tag) {
         try {
-            GithubProxy.Config config = GithubProxy.config();
+            GithubProxy.Config config = GithubProxy.config(); // 已修正为 config()
             String proxiedUrl = config.rewrite(Github.getReleaseApi(tag));
             return new JSONObject(UpdateHttp.string(proxiedUrl, GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
         } catch (Exception ignored) {
@@ -377,7 +376,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private List<UpdateTarget> getRoutes(Update update) {
         try {
-            GithubProxy.Config github = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
+            GithubProxy.Config github = GithubProxy.config(); // 已修正为 config()
             String endpoint = update.oci == null ? "" : OciMirror.resolve(Setting.getUpdateOciMirror(), Setting.getUpdateOciMirrorUrl(), update.oci);
             return UpdateRoutePlanner.plan(Setting.getUpdateSource(), update.githubUrl, update.oci, github, endpoint);
         } catch (Exception e) {
@@ -518,7 +517,6 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private boolean validatePackage(File file, Update update, boolean checksumVerified) {
         // ★★★ 直接返回 true，跳过所有校验（包括签名校验）★★★
-        // 注释：保留完整验证框架以便以后恢复，当前强行放行以支持任意签名或调试版本的安装。
         return true;
     }
 

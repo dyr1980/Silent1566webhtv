@@ -26,10 +26,10 @@ public class UpdateDialog extends BaseAlertDialog {
     private DialogUpdateBinding binding;
     private UpdateListener listener;
     private Update stable;
-    private Update beta;
-    private String selected = Update.CHANNEL_STABLE;
-    private boolean stableExpanded = true;
-    private boolean betaExpanded;
+    private Update beta; // [Beta 恢复点]
+    private String selected = Update.CHANNEL_STABLE; // [Beta 恢复点]
+    private boolean stableExpanded = true; // [Beta 恢复点]
+    private boolean betaExpanded; // [Beta 恢复点]
     private boolean downloading;
 
     public static UpdateDialog create() {
@@ -42,15 +42,17 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     public UpdateDialog beta(Update beta) {
-        this.beta = beta;
+        // this.beta = beta; // [Beta 恢复点]
         return this;
     }
 
     public UpdateDialog selected(String selected) {
+        // [Beta 恢复点] 暂时注释掉，以后需要 Beta 时取消下方注释
+        /*
         this.selected = selected;
-        boolean betaAvailable = hasBeta();
-        this.stableExpanded = !betaAvailable && !Update.CHANNEL_BETA.equals(selected);
-        this.betaExpanded = betaAvailable && Update.CHANNEL_BETA.equals(selected);
+        this.stableExpanded = !Update.CHANNEL_BETA.equals(selected);
+        this.betaExpanded = Update.CHANNEL_BETA.equals(selected);
+        */
         return this;
     }
 
@@ -84,9 +86,9 @@ public class UpdateDialog extends BaseAlertDialog {
     protected void initEvent() {
         binding.close.setOnClickListener(this::close);
         binding.stableItem.setOnClickListener(view -> toggle(Update.CHANNEL_STABLE));
-        binding.betaItem.setOnClickListener(view -> toggle(Update.CHANNEL_BETA));
+        // binding.betaItem.setOnClickListener(view -> toggle(Update.CHANNEL_BETA)); // [Beta 恢复点]
         binding.stableConfirm.setOnClickListener(view -> update(Update.CHANNEL_STABLE, view));
-        binding.betaConfirm.setOnClickListener(view -> update(Update.CHANNEL_BETA, view));
+        // binding.betaConfirm.setOnClickListener(view -> update(Update.CHANNEL_BETA, view)); // [Beta 恢复点]
         binding.cancel.setOnClickListener(this::action);
     }
 
@@ -108,12 +110,15 @@ public class UpdateDialog extends BaseAlertDialog {
             update(channel, getItem(channel));
             return;
         }
+        // [Beta 恢复点] 暂时注释掉 Beta 的展开逻辑
+        /*
         if (!hasBeta()) return;
         selected = channel;
         stableExpanded = Update.CHANNEL_STABLE.equals(channel);
         betaExpanded = Update.CHANNEL_BETA.equals(channel);
         if (listener != null) listener.onChannel(channel);
         render();
+        */
     }
 
     private void action(View view) {
@@ -139,9 +144,9 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private void render() {
         normalizeSelection();
-        binding.betaItem.setVisibility(hasBeta() ? View.VISIBLE : View.GONE);
+        // binding.betaItem.setVisibility(hasBeta() ? View.VISIBLE : View.GONE); // [Beta 恢复点]
         renderItem(Update.CHANNEL_STABLE, stable);
-        if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta);
+        // if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta); // [Beta 恢复点]
         renderAction();
         binding.close.setVisibility(View.VISIBLE);
         binding.progressPanel.setVisibility(View.GONE);
@@ -155,24 +160,38 @@ public class UpdateDialog extends BaseAlertDialog {
         View content = stableChannel ? binding.stableContent : binding.betaContent;
         item.setSelected(expanded);
         content.setVisibility(expanded ? View.VISIBLE : View.GONE);
+
         if (stableChannel) {
             binding.stableVersion.setText(getVersion(update));
             binding.stableStatus.setText(getStatus(update));
             binding.stableExpand.setVisibility(hasBeta() && !expanded ? View.VISIBLE : View.GONE);
             binding.stableExpand.setText(R.string.update_expand);
             binding.stableDesc.setText(MarkdownText.render(getBody(update), getString(R.string.update_no_notes)));
-            binding.stableConfirm.setEnabled(update != null && update.hasUpdate());
-            binding.stableConfirm.setText(R.string.update_confirm);
-            binding.stableConfirm.setVisibility(View.GONE);
+
+            if (update != null && update.hasUpdate()) {
+                binding.stableConfirm.setVisibility(View.VISIBLE);
+                binding.stableConfirm.setEnabled(true);
+                binding.stableConfirm.setText(R.string.update_confirm);
+            } else {
+                binding.stableConfirm.setVisibility(View.GONE);
+            }
         } else {
+            // [Beta 恢复点] 暂时注释掉 Beta 卡片的渲染逻辑
+            /*
             binding.betaVersion.setText(getVersion(update));
             binding.betaStatus.setText(getStatus(update));
             binding.betaExpand.setVisibility(!expanded ? View.VISIBLE : View.GONE);
             binding.betaExpand.setText(R.string.update_expand);
             binding.betaDesc.setText(MarkdownText.render(getBody(update), getString(R.string.update_no_notes)));
-            binding.betaConfirm.setEnabled(update != null && update.hasUpdate());
-            binding.betaConfirm.setText(R.string.update_confirm);
-            binding.betaConfirm.setVisibility(View.GONE);
+
+            if (update != null && update.hasUpdate()) {
+                binding.betaConfirm.setVisibility(View.VISIBLE);
+                binding.betaConfirm.setEnabled(true);
+                binding.betaConfirm.setText(R.string.update_confirm);
+            } else {
+                binding.betaConfirm.setVisibility(View.GONE);
+            }
+            */
         }
     }
 
@@ -198,31 +217,46 @@ public class UpdateDialog extends BaseAlertDialog {
         return update.getText();
     }
 
+    // [Beta 恢复点] 目前强制返回 false，以后恢复时改为：return beta != null && beta.hasManifest();
     private boolean hasBeta() {
-        return beta != null && beta.hasManifest();
+        return false;
     }
 
     private void normalizeSelection() {
+        // [Beta 恢复点] 暂时注释掉
+        /*
         if (hasBeta()) return;
+        selected = Update.CHANNEL_STABLE;
+        stableExpanded = true;
+        betaExpanded = false;
+        */
         selected = Update.CHANNEL_STABLE;
         stableExpanded = true;
         betaExpanded = false;
     }
 
     private Update getSelected() {
-        return Update.CHANNEL_BETA.equals(selected) ? beta : stable;
+        // [Beta 恢复点] 暂时只返回 stable
+        // return Update.CHANNEL_BETA.equals(selected) ? beta : stable;
+        return stable;
     }
 
     private boolean isExpanded(String channel) {
-        return Update.CHANNEL_BETA.equals(channel) ? betaExpanded : stableExpanded;
+        // [Beta 恢复点] 暂时只判断 stable
+        // return Update.CHANNEL_BETA.equals(channel) ? betaExpanded : stableExpanded;
+        return stableExpanded;
     }
 
     private View getItem(String channel) {
-        return Update.CHANNEL_BETA.equals(channel) ? binding.betaItem : binding.stableItem;
+        // [Beta 恢复点] 暂时只返回 stableItem
+        // return Update.CHANNEL_BETA.equals(channel) ? binding.betaItem : binding.stableItem;
+        return binding.stableItem;
     }
 
     private String getSelectedName() {
-        return getString(Update.CHANNEL_BETA.equals(selected) ? R.string.update_channel_beta : R.string.update_channel_stable);
+        // [Beta 恢复点] 暂时只返回 Stable 名称
+        // return getString(Update.CHANNEL_BETA.equals(selected) ? R.string.update_channel_beta : R.string.update_channel_stable);
+        return getString(R.string.update_channel_stable);
     }
 
     private void setDialogWidth(float factor) {
@@ -246,10 +280,12 @@ public class UpdateDialog extends BaseAlertDialog {
         downloading = true;
         boolean indeterminate = progress < 0;
         int value = Math.max(0, Math.min(100, progress));
+
         binding.stableItem.setEnabled(false);
-        binding.betaItem.setEnabled(false);
+        // binding.betaItem.setEnabled(false); // [Beta 恢复点]
         binding.stableConfirm.setEnabled(false);
-        binding.betaConfirm.setEnabled(false);
+        // binding.betaConfirm.setEnabled(false); // [Beta 恢复点]
+
         binding.cancel.setEnabled(true);
         binding.close.setVisibility(View.GONE);
         binding.progressPanel.setVisibility(View.VISIBLE);
@@ -261,7 +297,8 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private boolean isProgressTarget() {
-        return binding != null && isAdded() && getContext() != null && getDialog() != null;
+        return binding != null && isAdded() && getContext() != null
+                && getDialog() != null && getDialog().isShowing();
     }
 
     private String getProgressText(boolean indeterminate, int value, long bytes, long total, long speed, long elapsed) {

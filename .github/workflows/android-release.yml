@@ -33,7 +33,7 @@ on:
       publish_oci:
         description: "Publish APKs as OCI artifacts when Registry variables and secrets are configured"
         required: false
-        default: true
+        default: false    # <--- 修改这里：默认改为 false，以后不会再报错
         type: boolean
 
 permissions:
@@ -214,6 +214,7 @@ jobs:
           cp Release/apk/*.apk dist/
           ls -lh dist/
 
+      # OCI 相关步骤，因为 publish_oci 默认为 false，所以默认会自动跳过
       - name: Set up ORAS
         id: oras
         if: ${{ inputs.publish_oci }}
@@ -225,6 +226,7 @@ jobs:
       - name: Publish APKs to OCI Registry
         id: oci
         if: ${{ inputs.publish_oci && steps.oras.outcome == 'success' }}
+        continue-on-error: true
         env:
           DIST_DIR: dist
           OCI_METADATA_FILE: build/oci-metadata.json
@@ -232,7 +234,14 @@ jobs:
           OCI_REPOSITORY: ${{ vars.OCI_REPOSITORY }}
           OCI_USERNAME: ${{ secrets.OCI_USERNAME }}
           OCI_TOKEN: ${{ secrets.OCI_TOKEN }}
-        run: bash .github/scripts/publish-oci-apks.sh
+        run: |
+          if [ -z "$OCI_REPOSITORY" ] || [ -z "$OCI_USERNAME" ] || [ -z "$OCI_TOKEN" ]; then
+            echo "::warning title=OCI skipped::OCI_REPOSITORY or credentials missing. Skipping OCI publish."
+            echo "oci_published=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bash .github/scripts/publish-oci-apks.sh
+          echo "oci_published=true" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release notes input
         id: release_notes

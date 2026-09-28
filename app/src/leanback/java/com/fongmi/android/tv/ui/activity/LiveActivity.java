@@ -233,7 +233,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         mBinding.control.action.scale.setOnClickListener(view -> onScale());
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
         mBinding.control.action.config.setOnClickListener(view -> onConfig());
-        mBinding.control.action.osdSettings.setOnClickListener(view -> onOsd()); // 已完美恢复
+        mBinding.control.action.osdSettings.setOnClickListener(view -> onOsd());
         mBinding.control.action.action.setOnClickListener(view -> onAction());
         mBinding.control.action.invert.setOnClickListener(view -> onInvert());
         mBinding.control.action.across.setOnClickListener(view -> onAcross());
@@ -481,9 +481,9 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         hideControl();
     }
 
-    // ==================== 完美恢复：使用 getSupportFragmentManager() 代替 this ====================
     private void onOsd() {
-        PlayerOsdDialog.show(getSupportFragmentManager(), ResUtil.getStringArray(R.array.select_live_player_osd), PlayerSetting.getLiveDisplayChecked(), checked -> {
+        // 已修复：恢复为 this（LiveActivity 本身就是 FragmentActivity）
+        PlayerOsdDialog.show(this, ResUtil.getStringArray(R.array.select_live_player_osd), PlayerSetting.getLiveDisplayChecked(), checked -> {
             PlayerSetting.putLiveDisplayChecked(checked);
             if (mOsd != null) {
                 mOsd.setDiagnosticsVisible(PlayerSetting.isOsdDiagnostics());
@@ -492,7 +492,6 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         });
         hideControl();
     }
-    // =======================================================================================
 
     private void onAction() {
         checkPlay();

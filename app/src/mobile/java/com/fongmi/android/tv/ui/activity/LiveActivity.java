@@ -94,6 +94,7 @@ import com.fongmi.android.tv.ui.dialog.PassDialog;
 import com.fongmi.android.tv.ui.dialog.PlayerKernelDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
+import com.fongmi.android.tv.ui.dialog.PlayerOsdDialog;
 import com.fongmi.android.tv.utils.Biometric;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
@@ -804,6 +805,17 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void onConfig() {
         HistoryDialog.create().live().readOnly().show(this);
+        hideControl();
+    }
+
+    private void onOsd() {
+        PlayerOsdDialog.show(this, ResUtil.getStringArray(R.array.select_live_player_osd), PlayerSetting.getLiveDisplayChecked(), checked -> {
+            PlayerSetting.putLiveDisplayChecked(checked);
+            if (mOsd != null) {
+                mOsd.setDiagnosticsVisible(PlayerSetting.isOsdDiagnostics());
+                mOsd.start();
+            }
+        });
         hideControl();
     }
 
@@ -1590,6 +1602,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public void setLive(Live item) {
+        if (item.isSelected()) item.getGroups().clear();
         LiveConfig.get().setHome(item);
         player().reset();
         player().clear();
@@ -1953,8 +1966,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             hideUI();
         } else {
             hideInfo();
-            // PiP 窗口点 × 关闭时，主动停止播放，避免声音继续。
-            // 不能依赖 isStop() 时序，改为等生命周期 settle 后按最终状态判定。
             App.post(this::finishIfPipClosed, 0);
         }
     }
@@ -1979,9 +1990,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void setVideoView(boolean isInPictureInPictureMode) {
         if (isInPictureInPictureMode) {
-            // PiP 模式：显式让 video 填满整个 PiP 窗口，避免残留 embedded 布局参数
-            // （原布局 height=0dp+weight=9）导致 SurfaceView 渲染区域与 PiP 窗口尺寸不匹配，
-            // 表现为画面显示异常，退出后系统合成层残留最后一帧（水印残留）。
             ViewGroup.LayoutParams params = mBinding.video.getLayoutParams();
             if (params instanceof LinearLayoutCompat.LayoutParams layout) {
                 if (params.height == ViewGroup.LayoutParams.MATCH_PARENT
@@ -1993,7 +2001,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
                 mBinding.video.setLayoutParams(params);
             }
         } else {
-            // 退出 PiP：按当前 UI 模式恢复合适的布局（嵌入式小窗 vs 全屏）
             updateVideoHeight(videoSize);
         }
     }

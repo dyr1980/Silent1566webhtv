@@ -94,7 +94,6 @@ import com.fongmi.android.tv.ui.dialog.PassDialog;
 import com.fongmi.android.tv.ui.dialog.PlayerKernelDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
-import com.fongmi.android.tv.ui.dialog.PlayerOsdDialog;
 import com.fongmi.android.tv.utils.Biometric;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
@@ -805,17 +804,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void onConfig() {
         HistoryDialog.create().live().readOnly().show(this);
-        hideControl();
-    }
-
-    private void onOsd() {
-        PlayerOsdDialog.show(this, ResUtil.getStringArray(R.array.select_live_player_osd), PlayerSetting.getLiveDisplayChecked(), checked -> {
-            PlayerSetting.putLiveDisplayChecked(checked);
-            if (mOsd != null) {
-                mOsd.setDiagnosticsVisible(PlayerSetting.isOsdDiagnostics());
-                mOsd.start();
-            }
-        });
         hideControl();
     }
 

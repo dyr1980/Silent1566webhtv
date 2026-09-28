@@ -39,6 +39,7 @@ import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
+import com.github.catvod.utils.Prefers;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
@@ -48,7 +49,11 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
 
     private static final int GRID_COUNT = 3;
     private static final String TAG = "site_dialog";
+    private static final int ITEM_HEIGHT = 46;
+    private static final int ITEM_SPACE = 12;
+    private static final int MAX_HEIGHT = 344;
     private static final int INITIAL_BATCH = 48;
+    private static final String KEY_SCROLL_POSITION = "site_dialog_scroll_position";
 
     private static String selectedGroup = "";
 
@@ -68,6 +73,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     private boolean action;
     private boolean listLoaded;
     private int type;
+    private int savedScrollPosition = -1;
 
     public static SiteDialog create() {
         return new SiteDialog();
@@ -88,12 +94,17 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         this.activity = activity;
         if (activity instanceof SiteListener) listener = (SiteListener) activity;
         if (activity.isFinishing() || activity.isDestroyed()) return;
-        log("click received action=%s type=%s", action, type);
+        savedScrollPosition = Prefers.getInt(KEY_SCROLL_POSITION, -1);
+        log("click received action=%s type=%s savedPosition=%s", action, type, savedScrollPosition);
         showDirect(activity);
     }
 
     private int getCount() {
         return GRID_COUNT;
+    }
+
+    private float getWidth() {
+        return action ? 0.92f : 0.9f;
     }
 
     @Override
@@ -204,6 +215,14 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         runAfterFirstPreDraw("list preDraw", () -> {
             if (adapter != null) adapter.showAll();
             log("list expanded total=%sms items=%s", cost(), adapter == null ? -1 : adapter.getItemCount());
+            if (savedScrollPosition >= 0 && binding != null && binding.recycler != null) {
+                binding.recycler.post(() -> {
+                    if (binding != null && binding.recycler != null) {
+                        binding.recycler.scrollToPosition(savedScrollPosition);
+                        log("restored scroll position=%s", savedScrollPosition);
+                    }
+                });
+            }
             focusSelectedSite();
         });
     }
@@ -247,17 +266,18 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     }
 
     private void setRecyclerHeight(int count) {
-        // 全屏模式下，recycler 由布局 layout_weight 决定高度，无需动态计算
+        // 采用版本B的非全屏高度计算逻辑
+        int rows = Math.max(1, (int) Math.ceil((double) Math.max(1, count) / getCount()));
+        int height = rows * ResUtil.dp2px(ITEM_HEIGHT) + Math.max(0, rows - 1) * ResUtil.dp2px(ITEM_SPACE) + binding.recycler.getPaddingTop() + binding.recycler.getPaddingBottom();
         ViewGroup.LayoutParams params = binding.recycler.getLayoutParams();
-        params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        params.height = Math.min(height, ResUtil.dp2px(MAX_HEIGHT));
         binding.recycler.setLayoutParams(params);
-        binding.recycler.setMaxHeight(Integer.MAX_VALUE);
     }
 
     private void setRootWidth() {
         ViewGroup.LayoutParams params = binding.getRoot().getLayoutParams();
         if (params == null) params = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        params.width = (int) (ResUtil.getScreenWidth() * getWidth());
         binding.getRoot().setLayoutParams(params);
     }
 
@@ -276,8 +296,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     }
 
     private void setWidth() {
-        Window window = directDialog != null ? directDialog.getWindow() : getDialog() == null ? null : getDialog().getWindow();
-        applyWindow(window);
+        setWidth(getWidth());
     }
 
     private void onMode(View view) {
@@ -295,6 +314,13 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
 
     @Override
     public void onItemClick(Site item) {
+        if (adapter != null) {
+            int position = adapter.getItems().indexOf(item);
+            if (position != -1) {
+                Prefers.put(KEY_SCROLL_POSITION, position);
+                log("saved clicked position=%s name=%s", position, item.getName());
+            }
+        }
         if (listener != null) listener.setSite(item);
         dismiss();
     }
@@ -310,7 +336,6 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     @Override
     public boolean onItemKeyHorizontal(int position, boolean left) {
         if (binding == null || adapter == null || groupReordering) return false;
-        // 仅在该方向没有其它可聚焦目标时才翻组：action 模式下右侧有按钮列，右键让位给它
         if (!left && binding.action.getVisibility() == View.VISIBLE) return false;
         if (!isRowEdge(position, left)) return false;
         if (binding.groupList.getChildCount() == 0) return true;
@@ -399,10 +424,10 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         window.setWindowAnimations(0);
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         WindowManager.LayoutParams params = window.getAttributes();
-        params.width = WindowManager.LayoutParams.MATCH_PARENT;
-        params.height = WindowManager.LayoutParams.MATCH_PARENT;
+        // 采用版本B的非全屏设置
+        params.width = (int) (ResUtil.getScreenWidth() * getWidth());
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         window.setAttributes(params);
-        window.setLayout(params.width, params.height);
     }
 
     private void runAfterFirstPreDraw(String label, Runnable action) {
@@ -447,7 +472,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         super.onStart();
         Window window = getDialog() == null ? null : getDialog().getWindow();
         applyWindow(window);
-        if (adapter.getItemCount() == 0) dismiss();
+        if (adapter != null && adapter.getItemCount() == 0) dismiss();
     }
 
     private List<String> getGroups() {

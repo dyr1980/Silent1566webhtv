@@ -86,6 +86,14 @@ android {
 
     testOptions {
         unitTests.includeAndroidResources = true
+        unitTests.all {
+            // [恢复点] 临时排除因移除 Beta/CNB 而编译不过的测试类
+            // 将来恢复 Beta/CNB 时，把下面 4 行删掉即可
+            exclude '**/GithubTest.class'
+            exclude '**/UpdaterFutureTest.class'
+            exclude '**/UpdateChannelTest.class'
+            exclude '**/UpdateDialogChannelVisibilityTest.class'
+        }
     }
 
     // ASS rendering is part of normal builds; package the matching prebuilt ABI.

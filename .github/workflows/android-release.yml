@@ -207,6 +207,8 @@ jobs:
         run: |
           chmod +x ./gradlew
           rm -rf Release/apk
+          rm -rf app/build
+          rm -rf build
           ./gradlew \
             :app:assembleMobileArm64_v8aRelease \
             :app:assembleMobileArmeabi_v7aRelease \

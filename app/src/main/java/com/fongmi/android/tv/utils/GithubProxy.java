@@ -14,13 +14,22 @@ public final class GithubProxy {
     public static final String MODE_FULL_URL = "full_url";
     public static final String MODE_STRIP_SCHEME = "strip_scheme";
 
+    // ★★★★★ 修改开始：扩充前缀型加速源列表 ★★★★★
+    // 保留原有 5 项，追加 5 项常用的前缀型代理，供用户在加速源列表中逐个切换测试。
+    // 将来如需恢复原样，把追加的 5 行删掉即可。
     private static final String[] BUILT_IN = {
             DEFAULT,
             "https://ghfast.top/",
             "https://99z.top/",
             "https://proxy.v2gh.com/",
-            "https://proxy.api.030101.xyz/"
+            "https://proxy.api.030101.xyz/",
+            "https://ghproxy.net/",
+            "https://ghps.cc/",
+            "https://gh-proxy.net/",
+            "https://github.moeyy.xyz/",
+            "https://ghproxy.cc/"
     };
+    // ★★★★★ 修改结束 ★★★★★
 
     private GithubProxy() {
     }

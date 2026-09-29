@@ -2,35 +2,33 @@ package com.fongmi.android.tv.utils;
 
 public class Github {
 
-    // 1. 更新为你的 GitHub 仓库地址
+    // ★★★★★ 修改开始：将 fish2018/webhtv 替换为 dyr1980/Silent1566webhtv ★★★★★
+    // 原值：https://github.com/fish2018/webhtv/releases/latest/download
+    // 新值：https://github.com/dyr1980/Silent1566webhtv/releases/latest/download
     private static final String GITHUB_LATEST = "https://github.com/dyr1980/Silent1566webhtv/releases/latest/download";
+    
+    // 原值：https://github.com/fish2018/webhtv/releases/download
+    // 新值：https://github.com/dyr1980/Silent1566webhtv/releases/download
     private static final String GITHUB_RELEASE = "https://github.com/dyr1980/Silent1566webhtv/releases/download";
-    private static final String GITHUB_UPDATE_CHANNEL = GITHUB_RELEASE + "/update-channel";
-
-    // 2. CNB 镜像地址（已暂时注释，以后恢复时取消注释，并确保填入你的CNB仓库路径）
-    // private static final String CNB_MANIFEST = "https://cnb.cool/dyr1980/webhtv-release/-/git/raw/main/apk";
-
-    // 3. 更新为你的 GitHub API 地址
+    
+    // 原值：https://api.github.com/repos/fish2018/webhtv/releases/tags
+    // 新值：https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/tags
     private static final String GITHUB_API = "https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/tags";
+    
+    // 原值：https://api.github.com/repos/fish2018/webhtv/releases
+    // 新值：https://api.github.com/repos/dyr1980/Silent1566webhtv/releases
     private static final String GITHUB_RELEASES_API = "https://api.github.com/repos/dyr1980/Silent1566webhtv/releases";
+    
+    // 原值：https://api.github.com/repos/fish2018/webhtv/releases/assets
+    // 新值：https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/assets
     private static final String GITHUB_RELEASE_ASSETS_API = "https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/assets";
+    // ★★★★★ 修改结束 ★★★★★
 
-    public static String getChannelAsset(String name) {
-        return GITHUB_UPDATE_CHANNEL + "/" + name;
-    }
-
-    // [CNB 恢复] 恢复 CNB 时，取消下方代码注释，并注释或删除现在的 GitHub 回退逻辑
-    public static String getCnbMirrorAsset(String name) {
-        // return CNB_MANIFEST + "/" + name;
-        return getGithubLatestAsset(name); // 暂时回退到 GitHub
-    }
+    // ★ 保留原 CNB 常量，不修改。因为你没有 CNB 仓库，Updater 也不会去请求它
+    private static final String CNB = "https://cnb.cool/fish2035/webhtv-release/-/git/raw/main";
 
     public static String getCnbAsset(String name) {
-        // 【临时禁用 CNB】直接返回 GitHub 地址
-        return getGithubLatestAsset(name);
-        
-        // [CNB 恢复] 恢复 CNB 时，取消下方代码注释，并注释上方 return
-        // return getCnbMirrorAsset(name);
+        return CNB + "/apk/" + name;
     }
 
     public static String getGithubLatestAsset(String name) {

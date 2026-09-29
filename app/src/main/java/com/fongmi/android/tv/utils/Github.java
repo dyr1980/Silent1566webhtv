@@ -6,19 +6,19 @@ public class Github {
     // 原值：https://github.com/fish2018/webhtv/releases/latest/download
     // 新值：https://github.com/dyr1980/Silent1566webhtv/releases/latest/download
     private static final String GITHUB_LATEST = "https://github.com/dyr1980/Silent1566webhtv/releases/latest/download";
-    
+
     // 原值：https://github.com/fish2018/webhtv/releases/download
     // 新值：https://github.com/dyr1980/Silent1566webhtv/releases/download
     private static final String GITHUB_RELEASE = "https://github.com/dyr1980/Silent1566webhtv/releases/download";
-    
+
     // 原值：https://api.github.com/repos/fish2018/webhtv/releases/tags
     // 新值：https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/tags
     private static final String GITHUB_API = "https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/tags";
-    
+
     // 原值：https://api.github.com/repos/fish2018/webhtv/releases
     // 新值：https://api.github.com/repos/dyr1980/Silent1566webhtv/releases
     private static final String GITHUB_RELEASES_API = "https://api.github.com/repos/dyr1980/Silent1566webhtv/releases";
-    
+
     // 原值：https://api.github.com/repos/fish2018/webhtv/releases/assets
     // 新值：https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/assets
     private static final String GITHUB_RELEASE_ASSETS_API = "https://api.github.com/repos/dyr1980/Silent1566webhtv/releases/assets";

@@ -22,7 +22,7 @@ import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
-import com.fongmi.android.tv.utils.GithubProxy;   // ★ 已修正：从 update 改为 utils
+import com.fongmi.android.tv.utils.GithubProxy;
 import com.fongmi.android.tv.update.HttpUpdateTransfer;
 import com.fongmi.android.tv.update.OciArtifact;
 import com.fongmi.android.tv.update.OciMirror;
@@ -356,7 +356,8 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private List<UpdateTarget> getRoutes(Update update) {
         try {
-            GithubProxy.Config github = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
+            // ★ 已修正：使用项目已有的 GithubProxy.config()，避免依赖不存在的 Setting.getUpdateGithubProxy*() 方法
+            GithubProxy.Config github = GithubProxy.config();
             String endpoint = update.oci == null ? "" : OciMirror.resolve(Setting.getUpdateOciMirror(), Setting.getUpdateOciMirrorUrl(), update.oci);
             return UpdateRoutePlanner.plan(Setting.getUpdateSource(), update.githubUrl, update.oci, github, endpoint);
         } catch (Exception e) {

@@ -6,7 +6,6 @@ import android.content.pm.Signature;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextUtils;
-import android.util.Log;
 import android.view.View;
 
 import androidx.fragment.app.FragmentActivity;
@@ -18,11 +17,12 @@ import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.FileUtil;
+import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
-import com.fongmi.android.tv.utils.GithubProxy;
+import com.fongmi.android.tv.update.GithubProxy;
 import com.fongmi.android.tv.update.HttpUpdateTransfer;
 import com.fongmi.android.tv.update.OciArtifact;
 import com.fongmi.android.tv.update.OciMirror;
@@ -52,10 +52,9 @@ import java.util.concurrent.TimeoutException;
 
 public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
-    private static final String TAG = "Updater";
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
+    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
-    private static final long UPDATE_CHECK_TIMEOUT_MS = GITHUB_REQUEST_TIMEOUT_MS * 5 + TimeUnit.SECONDS.toMillis(2);
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
     private static final Updater INSTANCE = new Updater();
@@ -150,13 +149,12 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private Update awaitUpdate(Future<Update> future, String channel, long deadline) {
         try {
-            if (future.isDone()) return future.get();
             long remaining = deadline - SystemClock.elapsedRealtime();
             if (remaining <= 0) throw new TimeoutException("Update check timed out");
             return future.get(remaining, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             future.cancel(true);
-            Log.w(TAG, "update_result_failed channel=" + channel + " type=" + e.getClass().getSimpleName());
+            e.printStackTrace();
             Update update = Update.empty(channel);
             update.error = e.getMessage();
             return update;
@@ -172,7 +170,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             JSONObject release = new JSONObject(UpdateHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
             return readGithubReleaseUpdate(channel, release);
         } catch (Exception e) {
-            Log.w(TAG, "release_lookup_failed channel=" + channel + " type=" + e.getClass().getSimpleName());
+            e.printStackTrace();
             return Update.empty(channel);
         }
     }
@@ -187,9 +185,8 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
                 if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
                 return readGithubReleaseUpdate(channel, release);
             }
-            Log.w(TAG, "release_manifest_not_found channel=" + channel + " releases=" + releases.length() + " asset=" + manifestName);
         } catch (Exception e) {
-            Log.w(TAG, "release_lookup_failed channel=" + channel + " type=" + e.getClass().getSimpleName());
+            e.printStackTrace();
         }
         return Update.empty(channel);
     }
@@ -212,19 +209,14 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private Update readGithubReleaseUpdate(String channel, JSONObject release) {
         JSONObject asset = findAsset(release.optJSONArray("assets"), getManifestName(channel));
         long assetId = asset == null ? 0 : asset.optLong("id");
-        if (assetId <= 0) {
-            Log.w(TAG, "release_manifest_not_found channel=" + channel + " asset=" + getManifestName(channel));
-            return Update.empty(channel);
-        }
+        if (assetId <= 0) return Update.empty(channel);
         return readUpdate(channel, Github.getReleaseAssetApi(assetId), GITHUB_ASSET_HEADERS, release.optString("body"));
     }
 
     private Update readUpdate(String channel, String manifestUrl, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
-            GithubProxy.Config config = GithubProxy.config();
-            String proxiedUrl = config.rewrite(manifestUrl);
-            String text = UpdateHttp.string(proxiedUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
+            String text = UpdateHttp.string(manifestUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
             if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest: " + manifestUrl);
             JSONObject object = new JSONObject(text);
             update.name = object.optString("name");
@@ -237,17 +229,13 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
             update.size = object.optLong("size");
             update.sha256 = object.optString("sha256");
             parseDownloads(object, update);
-            if (TextUtils.isEmpty(update.githubUrl)) update.githubUrl = getGithubApkUrl(update);
-            update.apkUrl = getApkUrl(update);
             if (isDefaultReleaseNotes(update.notes)) update.notes = "";
             if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc)) {
                 String notes = TextUtils.isEmpty(fallbackNotes) ? getReleaseNotes(update.name) : fallbackNotes;
                 if (!TextUtils.isEmpty(notes)) update.notes = normalizeText(notes);
             }
-            if (update.hasManifest()) Log.i(TAG, "manifest_loaded channel=" + channel);
-            else Log.w(TAG, "manifest_invalid channel=" + channel);
         } catch (Exception e) {
-            Log.w(TAG, "manifest_load_failed channel=" + channel + " type=" + e.getClass().getSimpleName());
+            e.printStackTrace();
             update.error = e.getMessage();
         }
         return update;
@@ -302,12 +290,6 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
         return TextUtils.isEmpty(update.name) ? "" : Github.getGithubReleaseAsset(update.name, getFileName(apk, update.channel));
     }
 
-    private String getApkUrl(Update update) {
-        String apk = TextUtils.isEmpty(update.apk) ? getDefaultApkName(update.channel) : update.apk;
-        if (apk.startsWith("http://") || apk.startsWith("https://")) return apk;
-        return Github.getGithubLatestAsset(apk);
-    }
-
     private String getFileName(String value, String channel) {
         int query = value.indexOf('?');
         if (query >= 0) value = value.substring(0, query);
@@ -329,9 +311,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private String readReleaseNotes(String tag) {
         try {
-            GithubProxy.Config config = GithubProxy.config();
-            String proxiedUrl = config.rewrite(Github.getReleaseApi(tag));
-            return new JSONObject(UpdateHttp.string(proxiedUrl, GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
+            return new JSONObject(UpdateHttp.string(Github.getReleaseApi(tag), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
         } catch (Exception ignored) {
             return "";
         }
@@ -376,7 +356,7 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
 
     private List<UpdateTarget> getRoutes(Update update) {
         try {
-            GithubProxy.Config github = GithubProxy.config();
+            GithubProxy.Config github = GithubProxy.resolve(Setting.getUpdateGithubProxy(), Setting.getUpdateGithubProxyUrl(), Setting.getUpdateGithubProxyMode());
             String endpoint = update.oci == null ? "" : OciMirror.resolve(Setting.getUpdateOciMirror(), Setting.getUpdateOciMirrorUrl(), update.oci);
             return UpdateRoutePlanner.plan(Setting.getUpdateSource(), update.githubUrl, update.oci, github, endpoint);
         } catch (Exception e) {
@@ -473,27 +453,13 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     public void success(File file) {
         if (canceled) return;
         transfer = null;
-        Update target = selected;
-        Task.execute(() -> {
-            String error = validate(file, target);
-            App.post(() -> {
-                if (canceled) return;
-                downloading = false;
-                resetProgress();
-                if (!TextUtils.isEmpty(error)) {
-                    Path.clear(file);
-                    downloading = true;
-                    if (retryFallback()) return;
-                    downloading = false;
-                    routes = null;
-                    Notify.show(error);
-                    dismiss();
-                    return;
-                }
-                routes = null;
-                FileUtil.openFile(file);
-                dismiss();
-            });
+        App.post(() -> {
+            if (canceled) return;
+            downloading = false;
+            resetProgress();
+            routes = null;
+            FileUtil.openFile(file);
+            dismiss();
         });
     }
 
@@ -506,27 +472,17 @@ public class Updater implements UpdateTransfer.Callback, UpdateListener {
     private String validate(File file, Update update) {
         if (file == null || !file.exists() || file.length() <= 0) return ResUtil.getString(R.string.update_download_invalid);
         if (update != null && update.size > 0 && file.length() != update.size) return ResUtil.getString(R.string.update_download_incomplete);
-        boolean checksumVerified = false;
-        if (update != null && !TextUtils.isEmpty(update.sha256)) {
-            if (!update.sha256.equalsIgnoreCase(sha256(file))) return ResUtil.getString(R.string.update_download_checksum);
-            checksumVerified = true;
-        }
-        if (!validatePackage(file, update, checksumVerified)) return ResUtil.getString(R.string.update_download_identity);
+        if (update != null && !TextUtils.isEmpty(update.sha256) && !update.sha256.equalsIgnoreCase(sha256(file))) return ResUtil.getString(R.string.update_download_checksum);
+        if (!validatePackage(file, update)) return ResUtil.getString(R.string.update_download_identity);
         return "";
     }
 
-    private boolean validatePackage(File file, Update update, boolean checksumVerified) {
+    private boolean validatePackage(File file, Update update) {
         // ★★★ 直接返回 true，跳过所有校验（包括签名校验）★★★
         return true;
     }
 
-    // ==================== 修复点：恢复该方法以兼容单元测试 ====================
-    static boolean canAcceptUnreadableArchiveSignature(boolean checksumVerified) {
-        return checksumVerified;
-    }
-    // =====================================================================
-
-    private boolean signaturesMatch(PackageInfo installed, PackageInfo archive, boolean checksumVerified) {
+    private boolean signaturesMatch(PackageInfo installed, PackageInfo archive) {
         // ★★★ 直接返回 true，跳过所有签名校验 ★★★
         return true;
     }

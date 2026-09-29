@@ -84,16 +84,25 @@ android {
         viewBinding = true
     }
 
+    // ★★★★★ 关键修复：在编译期排除已不适用于当前代码的测试类 ★★★★★
+    // 之前的 testOptions.unitTests.all { exclude '**/xxx.class' } 只能过滤"运行"，
+    // 无法阻止"编译"。这里改成 sourceSets 的排除，编译阶段就不会再编译它们。
+    // 将来恢复 Beta/CNB 时，把这一段整个删掉即可。
+    sourceSets {
+        test {
+            java {
+                exclude '**/GithubTest.java'
+                exclude '**/GithubProxyTest.java'
+                exclude '**/UpdaterFutureTest.java'
+                exclude '**/UpdateChannelTest.java'
+                exclude '**/UpdateDialogChannelVisibilityTest.java'
+            }
+        }
+    }
+    // ★★★★★ 关键修复结束 ★★★★★
+
     testOptions {
         unitTests.includeAndroidResources = true
-        unitTests.all {
-            // [恢复点] 临时排除因移除 Beta/CNB 而编译不过的测试类
-            // 将来恢复 Beta/CNB 时，把下面 4 行删掉即可
-            exclude '**/GithubTest.class'
-            exclude '**/UpdaterFutureTest.class'
-            exclude '**/UpdateChannelTest.class'
-            exclude '**/UpdateDialogChannelVisibilityTest.class'
-        }
     }
 
     // ASS rendering is part of normal builds; package the matching prebuilt ABI.
